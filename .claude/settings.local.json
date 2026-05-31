@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"gb-eng w80: %{http_code}\\\\n\" \"https://flagcdn.com/w80/gb-eng.png\")",
+      "Bash(curl -s -o /dev/null -w \"gb-sct w80: %{http_code}\\\\n\" \"https://flagcdn.com/w80/gb-sct.png\")",
+      "Bash(curl -s -o /dev/null -w \"cw w80: %{http_code}\\\\n\" \"https://flagcdn.com/w80/cw.png\")",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git -c user.email=omazariegosdpb@users.noreply.github.com -c user.name=omazariegosdpb commit -m ' *)",
+      "Bash(curl -s -D - -o /dev/null http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"GET /grupos -> %{http_code} \\(Location: %{redirect_url}\\)\\\\n\" http://localhost:3000/grupos)",
+      "Bash(curl -s -o /dev/null -w \"GET / -> %{http_code}\\\\n\" http://localhost:3000/)",
+      "Read(//tmp/**)"
+    ]
+  }
+}

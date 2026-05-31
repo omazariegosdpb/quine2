@@ -1,0 +1,11 @@
+import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    name: "Quiniela Mundial 2026",
+    timestamp: new Date().toISOString(),
+  });
+}

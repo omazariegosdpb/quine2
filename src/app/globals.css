@@ -1,0 +1,367 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Quiniela Mundial 2026 — Sistema de diseño
+   Paleta oficial:
+     Verde Medio       #3CAC3B  — esperanza, juego limpio
+     Hermes (Azul)     #2A398D  — confianza, profesionalismo
+     Rojo Antorcha     #E61D25  — pasión, intensidad
+     Gris Claro        #D1D4D1  — soporte neutro
+     Gris Jaspeado     #474A4A  — contraste profundo
+   ============================================================ */
+
+:root {
+  /* ---- Verde Medio (cancha / acción) ---- */
+  --color-pitch-50:  #EAFAEA;
+  --color-pitch-100: #C8F0C7;
+  --color-pitch-200: #9DE39C;
+  --color-pitch-300: #6FD46E;
+  --color-pitch-400: #4CC04B;
+  --color-pitch-500: #3CAC3B; /* primario oficial */
+  --color-pitch-600: #339432;
+  --color-pitch-700: #2A7929;
+  --color-pitch-800: #1F5A1E;
+  --color-pitch-900: #103510;
+
+  /* ---- Hermes (azul oficial · profesional · info) ---- */
+  --color-azure-50:  #ECEEF7;
+  --color-azure-100: #D0D5EB;
+  --color-azure-200: #9CA6D3;
+  --color-azure-300: #6776BC;
+  --color-azure-400: #4254A5;
+  --color-azure-500: #344690;
+  --color-azure-600: #2A398D; /* azul oficial */
+  --color-azure-700: #1F2A6A;
+  --color-azure-800: #131B47;
+  --color-azure-900: #0A0F2C;
+
+  /* ---- Antorcha (rojo oficial · pasión · alertas) ---- */
+  --color-rouge-50:  #FDE8E9;
+  --color-rouge-100: #FAC6C8;
+  --color-rouge-200: #F38E91;
+  --color-rouge-300: #EC585C;
+  --color-rouge-400: #E83438;
+  --color-rouge-500: #E61D25; /* rojo oficial */
+  --color-rouge-600: #BE171F;
+  --color-rouge-700: #931218;
+  --color-rouge-800: #650C10;
+  --color-rouge-900: #3A0608;
+
+  /* ---- Dorado (premios y ganadores) ---- */
+  --color-gold-300:  #F0CB5C;
+  --color-gold-400:  #E2B540;
+  --color-gold-500:  #D4A017;
+  --color-gold-600:  #B07F0B;
+  --color-gold-700:  #875F06;
+
+  /* ---- Grises (oficiales) ---- */
+  --color-stone-50:  #F5F6F5;
+  --color-stone-100: #ECEDEC;
+  --color-stone-200: #D1D4D1; /* gris claro oficial */
+  --color-stone-300: #B6BAB6;
+  --color-stone-400: #91948F;
+  --color-stone-500: #6A6C68;
+  --color-stone-600: #5B5D5A;
+  --color-stone-700: #474A4A; /* gris oscuro oficial */
+  --color-stone-800: #303232;
+  --color-stone-900: #1A1B1B;
+
+  /* ---- Tokens semánticos ---- */
+  --color-primary:     var(--color-pitch-500);
+  --color-primary-50:  var(--color-pitch-50);
+  --color-primary-100: var(--color-pitch-100);
+  --color-primary-600: var(--color-pitch-600);
+  --color-primary-700: var(--color-pitch-700);
+  --color-primary-800: var(--color-pitch-800);
+
+  --color-info:        var(--color-azure-600);
+  --color-info-50:     var(--color-azure-50);
+  --color-info-100:    var(--color-azure-100);
+  --color-info-700:    var(--color-azure-700);
+  --color-info-800:    var(--color-azure-800);
+
+  --color-danger:      var(--color-rouge-500);
+  --color-danger-50:   var(--color-rouge-50);
+  --color-danger-100:  var(--color-rouge-100);
+  --color-danger-600:  var(--color-rouge-600);
+  --color-danger-700:  var(--color-rouge-700);
+
+  --color-success: var(--color-pitch-600);
+  --color-warning: #D97706;
+
+  /* ---- Superficies ---- */
+  --color-bg:         var(--color-stone-100); /* canvas gris claro, NO blanco */
+  --color-bg-strong:  var(--color-stone-200); /* secciones con más peso */
+  --color-surface:    #FFFFFF;                /* cards (alto contraste sobre bg gris) */
+  --color-surface-2:  var(--color-stone-50);  /* sub-bloques dentro de cards */
+  --color-border:     var(--color-stone-200);
+  --color-border-soft:#E1E3E1;
+  --color-muted:      var(--color-stone-500);
+  --color-text:       var(--color-stone-900);
+  --color-text-soft:  var(--color-stone-700);
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+
+  --color-pitch-50:  var(--color-pitch-50);
+  --color-pitch-100: var(--color-pitch-100);
+  --color-pitch-200: var(--color-pitch-200);
+  --color-pitch-300: var(--color-pitch-300);
+  --color-pitch-400: var(--color-pitch-400);
+  --color-pitch-500: var(--color-pitch-500);
+  --color-pitch-600: var(--color-pitch-600);
+  --color-pitch-700: var(--color-pitch-700);
+  --color-pitch-800: var(--color-pitch-800);
+  --color-pitch-900: var(--color-pitch-900);
+
+  --color-azure-50:  var(--color-azure-50);
+  --color-azure-100: var(--color-azure-100);
+  --color-azure-500: var(--color-azure-500);
+  --color-azure-600: var(--color-azure-600);
+  --color-azure-700: var(--color-azure-700);
+  --color-azure-800: var(--color-azure-800);
+
+  --color-rouge-50:  var(--color-rouge-50);
+  --color-rouge-100: var(--color-rouge-100);
+  --color-rouge-500: var(--color-rouge-500);
+  --color-rouge-600: var(--color-rouge-600);
+
+  --color-gold-500:  var(--color-gold-500);
+
+  --color-stone-100: var(--color-stone-100);
+  --color-stone-200: var(--color-stone-200);
+  --color-stone-700: var(--color-stone-700);
+
+  --color-primary:     var(--color-primary);
+  --color-primary-50:  var(--color-primary-50);
+  --color-primary-100: var(--color-primary-100);
+  --color-primary-600: var(--color-primary-600);
+  --color-primary-700: var(--color-primary-700);
+  --color-primary-800: var(--color-primary-800);
+
+  --color-info:        var(--color-info);
+  --color-info-50:     var(--color-info-50);
+  --color-info-100:    var(--color-info-100);
+  --color-info-700:    var(--color-info-700);
+
+  --color-danger:      var(--color-danger);
+  --color-danger-50:   var(--color-danger-50);
+  --color-danger-100:  var(--color-danger-100);
+  --color-danger-600:  var(--color-danger-600);
+
+  --color-success:   var(--color-success);
+  --color-warning:   var(--color-warning);
+
+  --color-surface:   var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
+  --color-border:    var(--color-border);
+  --color-muted:     var(--color-muted);
+  --color-text-soft: var(--color-text-soft);
+
+  --font-sans:    var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-display: var(--font-bebas), "Inter", system-ui, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  touch-action: manipulation;
+}
+
+@media (max-width: 768px) {
+  input[type="email"],
+  input[type="password"],
+  input[type="text"]:not(.text-xs):not(.text-sm),
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Tricolor — utilidad para acentos (top de cards / header) */
+.bg-tricolor {
+  background: linear-gradient(
+    90deg,
+    var(--color-pitch-500) 0%,
+    var(--color-pitch-500) 33.33%,
+    var(--color-azure-600) 33.33%,
+    var(--color-azure-600) 66.66%,
+    var(--color-rouge-500) 66.66%,
+    var(--color-rouge-500) 100%
+  );
+}
+
+.bg-tricolor-soft {
+  background: linear-gradient(
+    90deg,
+    var(--color-pitch-500) 0%,
+    var(--color-azure-600) 50%,
+    var(--color-rouge-500) 100%
+  );
+}
+
+/* Focus ring para enlaces / tabs / buttons custom */
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible,
+button:focus-visible {
+  outline: none;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* Feedback de tap/press para botones y enlaces tipo botón */
+.btn-press {
+  transition: transform 150ms ease-out, background-color 150ms ease-out,
+    box-shadow 150ms ease-out, filter 150ms ease-out;
+}
+.btn-press:active {
+  transform: scale(0.97);
+  filter: brightness(0.95);
+  transition-duration: 75ms;
+}
+
+/* Ripple ligero al apretar cualquier botón nativo o role=button */
+@keyframes btn-pulse {
+  0%   { box-shadow: 0 0 0 0 currentColor; opacity: 0.35; }
+  100% { box-shadow: 0 0 0 8px currentColor; opacity: 0; }
+}
+
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: scale(0.985);
+}
+
+/* ============================================================
+   Animaciones mundialistas (page loader + transición entre páginas)
+   ============================================================ */
+
+/* Balón rebotando con rotación: simula un balón pateado en el aire */
+@keyframes ball-bounce {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1);
+  }
+  50% {
+    transform: translateY(-26px) rotate(220deg);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1);
+  }
+}
+.animate-ball-bounce {
+  animation: ball-bounce 950ms infinite;
+}
+
+/* Sombra del balón que se "achica" cuando el balón sube */
+@keyframes ball-shadow {
+  0%, 100% { transform: scaleX(1); opacity: 0.35; }
+  50%      { transform: scaleX(0.55); opacity: 0.18; }
+}
+.animate-ball-shadow {
+  animation: ball-shadow 950ms infinite;
+  transform-origin: center;
+}
+
+/* Barra tricolor con shimmer mundialista */
+@keyframes tricolor-shimmer {
+  0%   { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+.bg-tricolor-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-pitch-500) 0%,
+    var(--color-pitch-500) 18%,
+    var(--color-azure-600) 33%,
+    var(--color-azure-600) 50%,
+    var(--color-rouge-500) 66%,
+    var(--color-rouge-500) 82%,
+    var(--color-pitch-500) 100%
+  );
+  background-size: 200% 100%;
+  animation: tricolor-shimmer 1.4s linear infinite;
+}
+
+/* Pulso de texto "Cargando…" */
+@keyframes label-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+.animate-label-pulse {
+  animation: label-pulse 1.2s ease-in-out infinite;
+}
+
+/* Fade-in al montar cada página (template.tsx re-monta en cada navegación) */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-page-fade-in {
+  animation: page-fade-in 240ms ease-out both;
+}
+
+/* Velo blanco que aparece en el loader (cubre la pantalla con fade suave) */
+@keyframes veil-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-veil-fade-in {
+  animation: veil-fade-in 120ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ball-bounce,
+  .animate-ball-shadow,
+  .bg-tricolor-shimmer,
+  .animate-label-pulse,
+  .animate-page-fade-in,
+  .animate-veil-fade-in {
+    animation: none;
+  }
+}
+
+/* Animaciones de toast */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0)   scale(1); }
+  to   { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+.animate-toast-in  { animation-name: toast-in; }
+.animate-toast-out { animation-name: toast-out; }

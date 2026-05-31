@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(git push *)",
+      "Bash(curl -s -o /dev/null -w \"w64 mx: %{http_code}\\\\n\" \"https://flagcdn.com/w64/mx.png\")",
+      "Bash(curl -s -o /dev/null -w \"w80 mx: %{http_code}\\\\n\" \"https://flagcdn.com/w80/mx.png\")",
+      "Bash(curl -s -o /dev/null -w \"w40 mx: %{http_code}\\\\n\" \"https://flagcdn.com/w40/mx.png\")",
+      "Bash(git -c user.email=omazariegosdpb@users.noreply.github.com -c user.name=omazariegosdpb commit -m ' *)",
+      "Bash(npm audit *)",
+      "Bash(tee /tmp/dev.log)",
+      "Bash(curl -s -o /tmp/login.html -w \"Status: %{http_code}\\\\nTime: %{time_total}s\\\\n\" http://localhost:3000/login)"
+    ]
+  }
+}
