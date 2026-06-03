@@ -80,26 +80,37 @@ async function Dashboard({ session }: { session: NonNullable<Awaited<ReturnType<
   const branding = await getBranding();
   const { quickRules } = await getAppTexts();
 
-  const { data: round } = await supabase
-    .from("rounds")
-    .select("*")
-    .eq("code", "GROUPS")
-    .maybeSingle();
-
-  const [predCountRes, matchesCountRes, standings, nearbyMatches] = await Promise.all([
+  // Ronda activa: misma lógica que /pronosticos — la no sellada con menor closes_at,
+  // si no, la primera activa. Así el dashboard refleja la ronda vigente y no una fija.
+  const [{ data: activeRounds }, standings, nearbyMatches] = await Promise.all([
     supabase
-      .from("predictions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", session.userId),
-    round
-      ? supabase.from("matches").select("id", { count: "exact", head: true }).eq("round_id", round.id)
-      : Promise.resolve({ count: 0 }),
+      .from("rounds")
+      .select("*")
+      .eq("is_active", true)
+      .order("closes_at", { ascending: true }),
     getMyStandings(session.userId),
     getNearbyMatches(session.userId),
   ]);
 
-  const total = matchesCountRes.count ?? 0;
-  const done = predCountRes.count ?? 0;
+  const round = (activeRounds ?? []).find((r) => !r.is_locked) ?? (activeRounds ?? [])[0] ?? null;
+
+  // Partidos de la ronda activa: necesitamos sus ids para contar SOLO sus pronósticos.
+  const { data: roundMatches } = round
+    ? await supabase.from("matches").select("id").eq("round_id", round.id)
+    : { data: [] as { id: number }[] };
+  const roundMatchIds = (roundMatches ?? []).map((m) => m.id);
+
+  // El numerador y el denominador deben ser de la MISMA ronda.
+  const { count: doneCount } = roundMatchIds.length
+    ? await supabase
+        .from("predictions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", session.userId)
+        .in("match_id", roundMatchIds)
+    : { count: 0 };
+
+  const total = roundMatchIds.length;
+  const done = doneCount ?? 0;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const closesAt = round?.closes_at ? new Date(round.closes_at) : null;
   const isLocked = round?.is_locked ?? false;
