@@ -170,7 +170,7 @@ async function Dashboard({ session }: { session: NonNullable<Awaited<ReturnType<
             tone={payTone}
             title="Pago"
             big={paymentLabel(payStatus)}
-            sub="Q100 por participante"
+            sub="Esperar confirmación"
             cta={
               payStatus === "confirmed"
                 ? undefined
