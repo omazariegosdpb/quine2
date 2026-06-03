@@ -1,5 +1,6 @@
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { PaymentRow } from "@/app/admin/pagos/PaymentRow";
+import { ManualConfirm } from "@/app/admin/pagos/ManualConfirm";
 import { formatGT } from "@/lib/date";
 import { Alert } from "@/components/ui/Alert";
 
@@ -28,13 +29,33 @@ export default async function AdminPaymentsPage() {
     // sin service_role no podemos firmar URLs ni traer emails
   }
 
+  // Jugadores activos aún sin pago confirmado: candidatos a confirmación manual
+  // (efectivo / sin comprobante). Incluye también a quienes nunca registraron un pago.
+  const { data: pendingPlayers } = await supabase
+    .from("profiles")
+    .select("id, display_name, full_name, payment_status")
+    .eq("role", "player")
+    .eq("is_active", true)
+    .neq("payment_status", "confirmed")
+    .order("display_name", { ascending: true });
+
+  const emailLookupIds = Array.from(
+    new Set([...userIds, ...(pendingPlayers ?? []).map((p) => p.id)]),
+  );
   const emails = new Map<string, string>();
-  if (hasAdmin && admin && userIds.length) {
-    for (const id of userIds) {
+  if (hasAdmin && admin && emailLookupIds.length) {
+    for (const id of emailLookupIds) {
       const { data } = await admin.auth.admin.getUserById(id);
       if (data?.user?.email) emails.set(id, data.user.email);
     }
   }
+
+  const manualPlayers = (pendingPlayers ?? []).map((p) => ({
+    id: p.id,
+    name: p.display_name ?? p.full_name ?? "—",
+    email: emails.get(p.id) ?? "—",
+    status: p.payment_status ?? "pending",
+  }));
 
   const rows = await Promise.all(
     (payments ?? []).map(async (p) => {
@@ -74,6 +95,16 @@ export default async function AdminPaymentsPage() {
           <p className="text-sm text-[var(--color-text-soft)]">{pending.length} pendientes</p>
         </header>
         <Table rows={pending} empty="Sin pagos por revisar." />
+      </section>
+
+      <section className="rounded-xl border border-[var(--color-border)] bg-white shadow-sm">
+        <header className="border-b border-[var(--color-border)] px-5 py-3">
+          <h2 className="font-display text-xl text-[var(--color-text)]">Confirmar sin comprobante</h2>
+          <p className="text-sm text-[var(--color-text-soft)]">
+            Marca a un jugador como pagado aunque no haya subido comprobante (efectivo, pago externo).
+          </p>
+        </header>
+        <ManualConfirm players={manualPlayers} />
       </section>
 
       <section className="rounded-xl border border-[var(--color-border)] bg-white shadow-sm">
