@@ -1,6 +1,9 @@
 import { Header } from "@/components/layout/Header";
 import { requireSession } from "@/lib/auth/session";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseAdminClient,
+} from "@/lib/supabase/server";
 
 export const metadata = { title: "Ranking · Quiniela Mundial 2026" };
 
@@ -40,14 +43,28 @@ export default async function RankingPage() {
   const locked = round?.is_locked ?? false;
 
   // Conteo de pronósticos por usuario.
+  //
+  // Visibilidad: con el cliente de sesión, RLS solo deja a un jugador leer SUS
+  // propios pronósticos antes del cierre, así que los demás le salían 0/72.
+  // Para que TODOS vean el conteo (solo el número, nunca las jugadas ajenas)
+  // agregamos del lado del servidor con el service-role (salta RLS). Si no está
+  // configurado, caemos al cliente de sesión (el jugador solo verá el suyo).
+  //
   // OJO: PostgREST devuelve máx. 1000 filas por request; con varios usuarios ×
   // 72 partidos se supera ese tope y el conteo quedaba truncado (p.ej. 40/72
   // cuando el usuario ya tenía los 72). Paginamos para contar todas las filas.
+  let counter = supabase;
+  try {
+    counter = createSupabaseAdminClient();
+  } catch {
+    // sin service role: el jugador solo verá el conteo propio.
+  }
+
   const completedByUser = new Map<string, number>();
   if (!locked) {
     const pageSize = 1000;
     for (let from = 0; ; from += pageSize) {
-      const { data, error } = await supabase
+      const { data, error } = await counter
         .from("predictions")
         .select("user_id")
         // orden por clave única (user_id, match_id) → paginación estable
