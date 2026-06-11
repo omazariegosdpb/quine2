@@ -39,14 +39,27 @@ export default async function RankingPage() {
     .maybeSingle();
   const locked = round?.is_locked ?? false;
 
-  const { data: progress } = locked
-    ? { data: null }
-    : await supabase
-        .from("predictions")
-        .select("user_id");
+  // Conteo de pronósticos por usuario.
+  // OJO: PostgREST devuelve máx. 1000 filas por request; con varios usuarios ×
+  // 72 partidos se supera ese tope y el conteo quedaba truncado (p.ej. 40/72
+  // cuando el usuario ya tenía los 72). Paginamos para contar todas las filas.
   const completedByUser = new Map<string, number>();
-  for (const r of progress ?? []) {
-    completedByUser.set(r.user_id, (completedByUser.get(r.user_id) ?? 0) + 1);
+  if (!locked) {
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from("predictions")
+        .select("user_id")
+        // orden por clave única (user_id, match_id) → paginación estable
+        .order("user_id", { ascending: true })
+        .order("match_id", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const r of data) {
+        completedByUser.set(r.user_id, (completedByUser.get(r.user_id) ?? 0) + 1);
+      }
+      if (data.length < pageSize) break;
+    }
   }
 
   return (
