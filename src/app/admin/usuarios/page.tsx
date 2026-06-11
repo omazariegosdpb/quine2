@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { CreateUserForm } from "@/app/admin/usuarios/CreateUserForm";
 import { UserActionsForm } from "@/app/admin/usuarios/UserActionsForm";
+import { ExportRoundForm } from "@/app/admin/usuarios/ExportRoundForm";
 import { Alert } from "@/components/ui/Alert";
 import { formatGT } from "@/lib/date";
 
@@ -8,10 +9,10 @@ export const metadata = { title: "Usuarios · Admin" };
 
 export default async function AdminUsersPage() {
   const supabase = await createSupabaseServerClient();
-  const { data: users } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const [{ data: users }, { data: rounds }] = await Promise.all([
+    supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+    supabase.from("rounds").select("code, name").order("closes_at", { ascending: true }),
+  ]);
 
   const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -36,9 +37,12 @@ export default async function AdminUsersPage() {
       </section>
 
       <section className="rounded-xl border border-[var(--color-border)] bg-white shadow-sm">
-        <header className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3">
-          <h2 className="font-display text-xl text-[var(--color-text)]">Jugadores</h2>
-          <span className="text-sm text-[var(--color-text-soft)]">{users?.length ?? 0} registros</span>
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-5 py-3">
+          <div>
+            <h2 className="font-display text-xl text-[var(--color-text)]">Jugadores</h2>
+            <span className="text-sm text-[var(--color-text-soft)]">{users?.length ?? 0} registros</span>
+          </div>
+          <ExportRoundForm rounds={rounds ?? []} />
         </header>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -71,7 +75,16 @@ export default async function AdminUsersPage() {
                     {formatGT(u.created_at, { dateStyle: "medium" })}
                   </td>
                   <td className="px-4 py-2">
-                    <UserActionsForm userId={u.id} isActive={u.is_active} />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a
+                        href={`/api/admin/usuarios/export?user=${u.id}`}
+                        className="rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--color-text-soft)] hover:bg-[var(--color-bg)]"
+                        title="Descargar pronósticos y puntos del jugador (.xlsx)"
+                      >
+                        Descargar
+                      </a>
+                      <UserActionsForm userId={u.id} isActive={u.is_active} />
+                    </div>
                   </td>
                 </tr>
               ))}
