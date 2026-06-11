@@ -43,7 +43,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const { data: target } = await supabase
+  // ↳ leer con service-role para una auditoría completa (sin filtros RLS por
+  // ronda abierta / dueño). Ya verificamos arriba que el solicitante es admin.
+  let reader = supabase;
+  try {
+    reader = createSupabaseAdminClient();
+  } catch {
+    // sin service role: seguimos con RLS (puede devolver datos incompletos).
+  }
+
+  const { data: target } = await reader
     .from("profiles")
     .select("id, display_name, full_name, payment_status, is_active")
     .eq("id", targetId)
@@ -53,18 +62,18 @@ export async function GET(req: Request) {
   }
 
   const [roundsRes, matchesRes, predsRes, teamsRes] = await Promise.all([
-    supabase.from("rounds").select("id, name, code").order("closes_at", { ascending: true }),
-    supabase
+    reader.from("rounds").select("id, name, code").order("closes_at", { ascending: true }),
+    reader
       .from("matches")
       .select(
         "id, round_id, group_letter, kickoff_at, home_team_id, away_team_id, home_score, away_score, status",
       )
       .order("kickoff_at", { ascending: true }),
-    supabase
+    reader
       .from("predictions")
       .select("match_id, home_score, away_score, created_at, updated_at")
       .eq("user_id", targetId),
-    supabase.from("teams").select("id, name, iso_code"),
+    reader.from("teams").select("id, name, iso_code"),
   ]);
 
   const rounds = roundsRes.data ?? [];

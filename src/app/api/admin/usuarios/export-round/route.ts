@@ -44,7 +44,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const { data: round } = await supabase
+  // ↳ leer con service-role para una auditoría completa (sin filtros RLS por
+  // ronda abierta / dueño). Ya verificamos arriba que el solicitante es admin.
+  // Si falta el service role, caemos al cliente de sesión (RLS).
+  let reader = supabase;
+  try {
+    reader = createSupabaseAdminClient();
+  } catch {
+    // sin service role: seguimos con RLS (puede devolver datos incompletos).
+  }
+
+  const { data: round } = await reader
     .from("rounds")
     .select("id, name, code")
     .eq("code", roundCode)
@@ -53,7 +63,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "round-not-found" }, { status: 404 });
   }
 
-  const { data: matchesData } = await supabase
+  const { data: matchesData } = await reader
     .from("matches")
     .select(
       "id, group_letter, kickoff_at, home_team_id, away_team_id, home_score, away_score, status",
@@ -67,21 +77,17 @@ export async function GET(req: Request) {
   }
   const matchIds = matches.map((m) => m.id);
 
-  const [playersRes, predsRes, teamsRes] = await Promise.all([
-    supabase
+  const [playersRes, preds, teamsRes] = await Promise.all([
+    reader
       .from("profiles")
       .select("id, display_name, full_name, payment_status, is_active")
       .eq("role", "player")
       .order("display_name", { ascending: true }),
-    supabase
-      .from("predictions")
-      .select("user_id, match_id, home_score, away_score, created_at, updated_at")
-      .in("match_id", matchIds),
-    supabase.from("teams").select("id, name, iso_code"),
+    fetchAllPredictions(reader, matchIds),
+    reader.from("teams").select("id, name, iso_code"),
   ]);
 
   const players = playersRes.data ?? [];
-  const preds = predsRes.data ?? [];
   const teams = teamsRes.data ?? [];
 
   const teamById = new Map(teams.map((t) => [t.id, t]));
@@ -236,6 +242,39 @@ export async function GET(req: Request) {
       "X-Audit-Hash": hash,
     },
   });
+}
+
+type Reader = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+type PredRow = {
+  user_id: string;
+  match_id: number;
+  home_score: number;
+  away_score: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Trae TODAS las predicciones de los partidos dados, paginando para superar el
+ * límite por defecto de PostgREST (1000 filas). Con muchos jugadores la ronda
+ * fácilmente excede ese tope.
+ */
+async function fetchAllPredictions(reader: Reader, matchIds: number[]): Promise<PredRow[]> {
+  const pageSize = 1000;
+  const all: PredRow[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await reader
+      .from("predictions")
+      .select("user_id, match_id, home_score, away_score, created_at, updated_at")
+      .in("match_id", matchIds)
+      .order("user_id", { ascending: true })
+      .order("match_id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...(data as PredRow[]));
+    if (data.length < pageSize) break;
+  }
+  return all;
 }
 
 function classify(

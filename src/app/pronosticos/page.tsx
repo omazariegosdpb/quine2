@@ -52,6 +52,9 @@ export default async function PronosticosPage({
 
   const isLocked = round.is_locked;
   const closesAt = round.closes_at ? new Date(round.closes_at) : null;
+  // Cierre por fecha: una vez pasado closes_at no se aceptan pronósticos
+  // (coincide con la regla server `round_is_open`: is_locked=false AND now()<closes_at).
+  const isClosed = closesAt ? closesAt.getTime() <= Date.now() : false;
 
   const [matchesRes, predsRes, teamsRes] = await Promise.all([
     supabase
@@ -163,6 +166,13 @@ export default async function PronosticosPage({
               Ya no se aceptan cambios.
             </Alert>
           </div>
+        ) : isClosed && closesAt ? (
+          <div className="mb-4">
+            <Alert tone="warning" title="Ronda cerrada">
+              El plazo cerró el {formatGT(closesAt, { dateStyle: "long", timeStyle: "short" })} GT.
+              Ya no se aceptan pronósticos para esta ronda.
+            </Alert>
+          </div>
         ) : closesAt ? (
           <div className="mb-4 rounded-md border border-[var(--color-pitch-200)] bg-[var(--color-pitch-50)] px-4 py-3 text-sm text-[var(--color-pitch-800)]">
             <strong>Cierre:</strong> {formatGT(closesAt, { dateStyle: "long", timeStyle: "short" })} GT
@@ -175,7 +185,7 @@ export default async function PronosticosPage({
           </div>
         ) : null}
 
-        <PredictionsClient items={items} locked={isLocked || paymentBlocked} />
+        <PredictionsClient items={items} locked={isLocked || isClosed || paymentBlocked} />
       </main>
     </>
   );
