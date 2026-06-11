@@ -59,7 +59,7 @@ export async function createUserAction(_prev: ActionState, formData: FormData): 
 
 const ToggleSchema = z.object({
   userId: z.string().uuid(),
-  action: z.enum(["deactivate", "activate", "reset-password"]),
+  action: z.enum(["deactivate", "soft-deactivate", "activate", "reset-password"]),
 });
 
 export async function userAdminAction(formData: FormData): Promise<ActionState> {
@@ -96,7 +96,21 @@ export async function userAdminAction(formData: FormData): Promise<ActionState> 
     await supabase.auth.admin.updateUserById(parsed.data.userId, { ban_duration: "100000h" });
 
     revalidatePath("/admin/usuarios");
+    revalidatePath("/ranking");
     return { ok: true, message: "Usuario retirado y anonimizado." };
+  }
+
+  if (parsed.data.action === "soft-deactivate") {
+    // Desactivación reversible: solo oculta del ranking y bloquea el acceso.
+    // NO anonimiza ni toca el pago — el nombre y el historial se conservan.
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_active: false })
+      .eq("id", parsed.data.userId);
+    if (error) return { ok: false, message: error.message };
+    revalidatePath("/admin/usuarios");
+    revalidatePath("/ranking");
+    return { ok: true, message: "Usuario desactivado. No aparecerá en el ranking." };
   }
 
   if (parsed.data.action === "activate") {
@@ -107,6 +121,7 @@ export async function userAdminAction(formData: FormData): Promise<ActionState> 
     if (error) return { ok: false, message: error.message };
     await supabase.auth.admin.updateUserById(parsed.data.userId, { ban_duration: "none" });
     revalidatePath("/admin/usuarios");
+    revalidatePath("/ranking");
     return { ok: true, message: "Usuario reactivado." };
   }
 

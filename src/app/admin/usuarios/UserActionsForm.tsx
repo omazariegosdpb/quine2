@@ -12,13 +12,21 @@ export function UserActionsForm({ userId, isActive }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
 
-  async function run(action: "deactivate" | "activate" | "reset-password") {
+  async function run(action: "deactivate" | "soft-deactivate" | "activate" | "reset-password") {
     if (action === "deactivate") {
       const ok = await confirm({
         title: "Retirar jugador",
         description: "El jugador queda anonimizado y no podrá volver a iniciar sesión. Sus pronósticos se conservan para auditoría.",
         confirmLabel: "Retirar",
         tone: "danger",
+      });
+      if (!ok) return;
+    } else if (action === "soft-deactivate") {
+      const ok = await confirm({
+        title: "Desactivar jugador",
+        description: "No aparecerá en el ranking y no podrá iniciar sesión hasta reactivarlo. Se conservan su nombre, pago e historial. Es reversible.",
+        confirmLabel: "Desactivar",
+        tone: "warning",
       });
       if (!ok) return;
     } else if (action === "reset-password") {
@@ -65,14 +73,24 @@ export function UserActionsForm({ userId, isActive }: Props) {
         Resetear contraseña
       </button>
       {isActive ? (
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => run("deactivate")}
-          className="rounded-md border border-[var(--color-danger)]/40 bg-white px-2.5 py-1 text-xs font-semibold text-[var(--color-danger)] hover:bg-[var(--color-danger-50)] disabled:opacity-50"
-        >
-          Retirar
-        </button>
+        <>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => run("soft-deactivate")}
+            className="rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--color-text-soft)] hover:bg-[var(--color-bg)] disabled:opacity-50"
+          >
+            Desactivar
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => run("deactivate")}
+            className="rounded-md border border-[var(--color-danger)]/40 bg-white px-2.5 py-1 text-xs font-semibold text-[var(--color-danger)] hover:bg-[var(--color-danger-50)] disabled:opacity-50"
+          >
+            Retirar
+          </button>
+        </>
       ) : (
         <button
           type="button"

@@ -45,12 +45,6 @@ export function MatchesStrip({ matches }: { matches: NearbyMatches }) {
         <h2 className="font-display text-xl text-[var(--color-text)]">
           Calendario de partidos
         </h2>
-        <Link
-          href="/pronosticos"
-          className="text-xs font-semibold text-[var(--color-info)] hover:underline"
-        >
-          Ver todos →
-        </Link>
       </div>
 
       {!hasAny ? (
@@ -73,8 +67,7 @@ export function MatchesStrip({ matches }: { matches: NearbyMatches }) {
 
 function DayColumn({ tone, matches }: { tone: Tone; matches: DayMatch[] }) {
   const t = TONES[tone];
-  const main = matches[0] ?? null;
-  const extra = matches.length - 1;
+  const first = matches[0] ?? null;
 
   return (
     <div
@@ -88,23 +81,28 @@ function DayColumn({ tone, matches }: { tone: Tone; matches: DayMatch[] }) {
         <span className="font-display text-xs uppercase tracking-widest text-[var(--color-text-soft)]">
           {t.emoji} {t.label}
         </span>
-        {main && (
+        {first && (
           <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">
-            {formatGT(main.kickoffAt, { weekday: "short", day: "numeric", month: "short" })}
+            {formatGT(first.kickoffAt, { weekday: "short", day: "numeric", month: "short" })}
+            {matches.length > 1 && ` · ${matches.length} partidos`}
           </span>
         )}
       </div>
 
       <div className="px-4 pb-4 pt-2">
-        {main ? <MatchRow m={main} tone={tone} /> : <EmptyRow tone={tone} />}
-        {extra > 0 && (
-          <Link
-            href="/pronosticos"
-            className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-info)] hover:underline"
-          >
-            + {extra} más {tone === "past" ? "ayer" : tone === "today" ? "hoy" : "mañana"}
-            <span aria-hidden>›</span>
-          </Link>
+        {matches.length === 0 ? (
+          <EmptyRow tone={tone} />
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {matches.map((m) => (
+              <li
+                key={m.id}
+                className="border-t border-[var(--color-border-soft)] pt-3 first:border-t-0 first:pt-0"
+              >
+                <MatchRow m={m} tone={tone} />
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>

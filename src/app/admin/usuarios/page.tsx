@@ -69,7 +69,13 @@ export default async function AdminUsersPage() {
                     <Pill tone={paymentTone(u.payment_status)}>{u.payment_status}</Pill>
                   </td>
                   <td className="px-4 py-2">
-                    <Pill tone={u.is_active ? "green" : "muted"}>{u.is_active ? "activo" : "retirado"}</Pill>
+                    <Pill tone={u.is_active ? "green" : "muted"}>
+                      {u.is_active
+                        ? "activo"
+                        : u.full_name === "[anonimizado]"
+                          ? "retirado"
+                          : "inactivo"}
+                    </Pill>
                   </td>
                   <td className="px-4 py-2 text-xs text-[var(--color-muted)]">
                     {formatGT(u.created_at, { dateStyle: "medium" })}
