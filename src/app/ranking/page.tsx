@@ -79,6 +79,44 @@ export default async function RankingPage() {
     }
   }
 
+  // Último partido con resultado: para mostrar "tras X vs Y" cuánto sumó cada
+  // quien. "Último" = el de kickoff más reciente que ya está finalizado.
+  const { data: lastMatchRows } = await supabase
+    .from("matches")
+    .select("id, home_team_id, away_team_id, home_score, away_score")
+    .eq("status", "finished")
+    .not("home_score", "is", null)
+    .not("away_score", "is", null)
+    .order("kickoff_at", { ascending: false })
+    .limit(1);
+  const lastMatch = lastMatchRows?.[0] ?? null;
+
+  let lastMatchLabel: string | null = null;
+  const lastDeltaByUser = new Map<string, number>();
+  if (lastMatch) {
+    const rHome = lastMatch.home_score ?? 0;
+    const rAway = lastMatch.away_score ?? 0;
+
+    const { data: lmTeams } = await supabase
+      .from("teams")
+      .select("id, name")
+      .in("id", [lastMatch.home_team_id, lastMatch.away_team_id]);
+    const nameById = new Map((lmTeams ?? []).map((t) => [t.id, t.name]));
+    lastMatchLabel = `${nameById.get(lastMatch.home_team_id) ?? "?"} vs ${nameById.get(lastMatch.away_team_id) ?? "?"}`;
+
+    // Pronósticos de TODOS para ese partido (service-role salta RLS). Cada
+    // usuario sumó 3 (exacto), 1 (resultado) o 0 (falla / sin pronóstico).
+    const { data: lmPreds } = await counter
+      .from("predictions")
+      .select("user_id, home_score, away_score")
+      .eq("match_id", lastMatch.id);
+    for (const p of lmPreds ?? []) {
+      const exact = p.home_score === rHome && p.away_score === rAway;
+      const result = Math.sign(p.home_score - p.away_score) === Math.sign(rHome - rAway);
+      lastDeltaByUser.set(p.user_id, exact ? 3 : result ? 1 : 0);
+    }
+  }
+
   return (
     <>
       <Header profile={session.profile} />
@@ -92,6 +130,15 @@ export default async function RankingPage() {
           {!locked && " · pronósticos visibles después del cierre"}
         </p>
 
+        {lastMatchLabel && (
+          <p className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-info-100)] bg-[var(--color-info-50)] px-3 py-2 text-sm text-[var(--color-info-800)]">
+            <span aria-hidden>⚽️</span>
+            <span>
+              Tras <strong>{lastMatchLabel}</strong>, lo que sumó cada quien:
+            </span>
+          </p>
+        )}
+
         <ol className="mt-5 flex flex-col gap-2">
           {sorted.map((row, idx) => (
             <li key={row.user_id}>
@@ -104,6 +151,7 @@ export default async function RankingPage() {
                 isSelf={row.user_id === session.userId}
                 progress={locked ? null : completedByUser.get(row.user_id) ?? 0}
                 progressMax={totalMatches ?? 0}
+                lastDelta={lastMatch ? lastDeltaByUser.get(row.user_id) ?? 0 : null}
               />
             </li>
           ))}
@@ -119,7 +167,7 @@ export default async function RankingPage() {
 }
 
 function Row({
-  pos, name, points, exact, result, isSelf, progress, progressMax,
+  pos, name, points, exact, result, isSelf, progress, progressMax, lastDelta,
 }: {
   pos: number;
   name: string;
@@ -129,6 +177,7 @@ function Row({
   isSelf: boolean;
   progress: number | null;
   progressMax: number;
+  lastDelta: number | null;
 }) {
   const medal = pos === 1 ? "🥇" : pos === 2 ? "🥈" : pos === 3 ? "🥉" : null;
   return (
@@ -153,10 +202,31 @@ function Row({
           </p>
         </div>
       </div>
-      <div className="flex flex-col items-end">
-        <span className="font-display text-2xl text-[var(--color-pitch-700)]">{points}</span>
-        <span className="text-[10px] uppercase tracking-wider text-[var(--color-muted)]">pts</span>
+      <div className="flex shrink-0 items-center gap-2">
+        {lastDelta !== null && <DeltaChip value={lastDelta} />}
+        <div className="flex flex-col items-end">
+          <span className="font-display text-2xl text-[var(--color-pitch-700)]">{points}</span>
+          <span className="text-[10px] uppercase tracking-wider text-[var(--color-muted)]">pts</span>
+        </div>
       </div>
     </div>
+  );
+}
+
+function DeltaChip({ value }: { value: number }) {
+  // +3 verde (exacto), +1 azul (resultado), +0 gris (sin acierto).
+  const cls =
+    value === 3
+      ? "bg-[var(--color-pitch-100)] text-[var(--color-pitch-800)]"
+      : value === 1
+        ? "bg-[var(--color-info-50)] text-[var(--color-info-700)]"
+        : "bg-[var(--color-stone-100)] text-[var(--color-muted)]";
+  return (
+    <span
+      className={["inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold tabular-nums", cls].join(" ")}
+      title="Puntos sumados en el último partido"
+    >
+      +{value}
+    </span>
   );
 }

@@ -328,16 +328,19 @@ function MatchCard({
       ].join(" ")}
     >
       <div className={["flex items-center justify-between gap-2 border-b px-3 py-2.5 text-xs", m.header].join(" ")}>
-        <div className="flex min-w-0 items-center gap-2">
-          <span className={["inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full px-2 text-[11px] font-bold", m.chip].join(" ")}>
-            {match.group}
-          </span>
-          <span className="font-bold leading-none">
-            {formatGT(match.kickoffAt, { timeStyle: "short" })} GT
-          </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={["inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full px-2 text-[11px] font-bold", m.chip].join(" ")}>
+              {match.group}
+            </span>
+            <span className="font-bold leading-none">
+              {formatGT(match.kickoffAt, { timeStyle: "short" })} GT
+            </span>
+          </div>
           {match.venue && (
-            <span className="hidden truncate opacity-75 sm:inline-block sm:max-w-[180px] leading-none">
-              · {match.venue}
+            <span className="flex min-w-0 items-center gap-1 opacity-75">
+              <span aria-hidden>📍</span>
+              <span className="truncate">{match.venue}</span>
             </span>
           )}
         </div>

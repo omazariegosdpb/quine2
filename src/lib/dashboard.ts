@@ -6,6 +6,7 @@ const TZ = publicEnv.appTimezone; // America/Guatemala (UTC-6, sin DST)
 export type DayMatch = {
   id: number;
   kickoffAt: string;
+  venue: string | null;
   status: "scheduled" | "live" | "finished" | "cancelled";
   homeScore: number | null;
   awayScore: number | null;
@@ -62,7 +63,7 @@ export async function getNearbyMatches(userId: string): Promise<NearbyMatches> {
   const { data: matches } = await supabase
     .from("matches")
     .select(
-      "id, kickoff_at, status, home_score, away_score, group_letter, home_team_id, away_team_id",
+      "id, kickoff_at, venue, status, home_score, away_score, group_letter, home_team_id, away_team_id",
     )
     .gte("kickoff_at", start)
     .lte("kickoff_at", end)
@@ -103,6 +104,7 @@ export async function getNearbyMatches(userId: string): Promise<NearbyMatches> {
     const vm: DayMatch = {
       id: m.id,
       kickoffAt: m.kickoff_at,
+      venue: m.venue,
       status: m.status,
       homeScore: m.home_score,
       awayScore: m.away_score,

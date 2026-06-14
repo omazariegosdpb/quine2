@@ -160,6 +160,13 @@ function MatchRow({ m, tone }: { m: DayMatch; tone: Tone }) {
         )}
       </div>
 
+      {m.venue && (
+        <p className="flex items-center gap-1 text-[11px] text-[var(--color-muted)]">
+          <span aria-hidden>📍</span>
+          <span className="min-w-0 truncate">{m.venue}</span>
+        </p>
+      )}
+
       <PredictionLine m={m} tone={tone} finished={finished} />
     </div>
   );
