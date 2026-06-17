@@ -17,7 +17,6 @@ export type DayMatch = {
 };
 
 export type NearbyMatches = {
-  yesterday: DayMatch[];
   today: DayMatch[];
   tomorrow: DayMatch[];
 };
@@ -42,7 +41,7 @@ function gtDayBucket(d: Date): string {
 }
 
 /**
- * Partidos de ayer / hoy / mañana con info de equipos y la predicción del jugador.
+ * Partidos de hoy / mañana con info de equipos y la predicción del jugador.
  * Usa zona horaria GT (UTC-6 fijo, Guatemala no tiene DST).
  */
 export async function getNearbyMatches(userId: string): Promise<NearbyMatches> {
@@ -52,12 +51,11 @@ export async function getNearbyMatches(userId: string): Promise<NearbyMatches> {
   const todayStr = gtDayBucket(now);
   const [y, m, d] = todayStr.split("-").map(Number);
 
-  // GT midnight = UTC 06:00. Tomamos un rango generoso por si la franja
-  // ayer→mañana cruza algún borde extraño.
-  const start = new Date(Date.UTC(y, m - 1, d - 1, 6, 0, 0)).toISOString();
+  // GT midnight = UTC 06:00. Rango desde la medianoche GT de hoy hasta el
+  // final del día de mañana (ya no incluimos ayer).
+  const start = new Date(Date.UTC(y, m - 1, d, 6, 0, 0)).toISOString();
   const end = new Date(Date.UTC(y, m - 1, d + 2, 5, 59, 59)).toISOString();
 
-  const yesterdayStr = gtDayBucket(new Date(now.getTime() - 86400 * 1000));
   const tomorrowStr = gtDayBucket(new Date(now.getTime() + 86400 * 1000));
 
   const { data: matches } = await supabase
@@ -71,7 +69,7 @@ export async function getNearbyMatches(userId: string): Promise<NearbyMatches> {
 
   const list = matches ?? [];
   if (list.length === 0) {
-    return { yesterday: [], today: [], tomorrow: [] };
+    return { today: [], tomorrow: [] };
   }
 
   const teamIds = new Set<number>();
@@ -95,7 +93,7 @@ export async function getNearbyMatches(userId: string): Promise<NearbyMatches> {
     (preds ?? []).map((p) => [p.match_id, { home: p.home_score, away: p.away_score }]),
   );
 
-  const buckets: NearbyMatches = { yesterday: [], today: [], tomorrow: [] };
+  const buckets: NearbyMatches = { today: [], tomorrow: [] };
 
   for (const m of list) {
     const bucket = gtDayBucket(new Date(m.kickoff_at));
@@ -121,8 +119,7 @@ export async function getNearbyMatches(userId: string): Promise<NearbyMatches> {
       },
       myPrediction: predByMatch.get(m.id) ?? null,
     };
-    if (bucket === yesterdayStr) buckets.yesterday.push(vm);
-    else if (bucket === todayStr) buckets.today.push(vm);
+    if (bucket === todayStr) buckets.today.push(vm);
     else if (bucket === tomorrowStr) buckets.tomorrow.push(vm);
   }
 

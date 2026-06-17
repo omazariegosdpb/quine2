@@ -56,6 +56,13 @@ export default async function PronosticosPage({
   // (coincide con la regla server `round_is_open`: is_locked=false AND now()<closes_at).
   const isClosed = closesAt ? closesAt.getTime() <= Date.now() : false;
 
+  // Día de hoy en GT (UTC-6 fijo, Guatemala no tiene DST). Mismo cálculo que
+  // `isoDayInGT` del cliente, para poder enfocar el tab del día actual.
+  const todayKeyGT = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // Si la ronda ya está cerrada (por fecha o sellada), se está jugando: abrir
+  // directamente en el día de hoy (el partido actual) en vez del primer pendiente.
+  const focusToday = isClosed || isLocked;
+
   const [matchesRes, predsRes, teamsRes] = await Promise.all([
     supabase
       .from("matches")
@@ -185,7 +192,12 @@ export default async function PronosticosPage({
           </div>
         ) : null}
 
-        <PredictionsClient items={items} locked={isLocked || isClosed || paymentBlocked} />
+        <PredictionsClient
+          items={items}
+          locked={isLocked || isClosed || paymentBlocked}
+          focusToday={focusToday}
+          todayKey={todayKeyGT}
+        />
       </main>
     </>
   );

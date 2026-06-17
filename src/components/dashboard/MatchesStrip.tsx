@@ -3,7 +3,7 @@ import { Flag } from "@/components/flags/Flag";
 import { formatGT } from "@/lib/date";
 import type { DayMatch, NearbyMatches } from "@/lib/dashboard";
 
-type Tone = "past" | "today" | "future";
+type Tone = "today" | "future";
 
 const TONES: Record<Tone, {
   border: string;
@@ -12,13 +12,6 @@ const TONES: Record<Tone, {
   emoji: string;
   caption: string;
 }> = {
-  past: {
-    border: "border-[var(--color-border)]",
-    bar: "bg-[var(--color-stone-300)]",
-    label: "Ayer",
-    emoji: "📅",
-    caption: "Resultado oficial",
-  },
   today: {
     border: "border-[var(--color-pitch-300)] ring-1 ring-[var(--color-pitch-200)]",
     bar: "bg-tricolor",
@@ -36,8 +29,7 @@ const TONES: Record<Tone, {
 };
 
 export function MatchesStrip({ matches }: { matches: NearbyMatches }) {
-  const hasAny =
-    matches.yesterday.length + matches.today.length + matches.tomorrow.length > 0;
+  const hasAny = matches.today.length + matches.tomorrow.length > 0;
 
   return (
     <section className="mt-6">
@@ -55,8 +47,7 @@ export function MatchesStrip({ matches }: { matches: NearbyMatches }) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <DayColumn tone="past" matches={matches.yesterday} />
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <DayColumn tone="today" matches={matches.today} />
           <DayColumn tone="future" matches={matches.tomorrow} />
         </div>
@@ -99,7 +90,7 @@ function DayColumn({ tone, matches }: { tone: Tone; matches: DayMatch[] }) {
                 key={m.id}
                 className="border-t border-[var(--color-border-soft)] pt-3 first:border-t-0 first:pt-0"
               >
-                <MatchRow m={m} tone={tone} />
+                <MatchRow m={m} />
               </li>
             ))}
           </ul>
@@ -110,8 +101,7 @@ function DayColumn({ tone, matches }: { tone: Tone; matches: DayMatch[] }) {
 }
 
 function EmptyRow({ tone }: { tone: Tone }) {
-  const msg =
-    tone === "past" ? "Sin partido ayer." : tone === "today" ? "Sin partido hoy." : "Sin partido mañana.";
+  const msg = tone === "today" ? "Sin partido hoy." : "Sin partido mañana.";
   return (
     <p className="rounded-md bg-[var(--color-surface-2)] px-3 py-4 text-center text-xs text-[var(--color-muted)]">
       {msg}
@@ -119,7 +109,7 @@ function EmptyRow({ tone }: { tone: Tone }) {
   );
 }
 
-function MatchRow({ m, tone }: { m: DayMatch; tone: Tone }) {
+function MatchRow({ m }: { m: DayMatch }) {
   const finished = m.status === "finished" && m.homeScore !== null && m.awayScore !== null;
   const live = m.status === "live";
   const kickoffLabel = formatGT(m.kickoffAt, { timeStyle: "short" });
@@ -146,7 +136,7 @@ function MatchRow({ m, tone }: { m: DayMatch; tone: Tone }) {
       <div className="mt-1 flex items-center justify-between text-[11px]">
         <span className="text-[var(--color-muted)]">
           {m.group ? `Grupo ${m.group} · ` : ""}
-          {tone === "past"
+          {finished
             ? "Final"
             : live
               ? "En curso"
@@ -167,7 +157,7 @@ function MatchRow({ m, tone }: { m: DayMatch; tone: Tone }) {
         </p>
       )}
 
-      <PredictionLine m={m} tone={tone} finished={finished} />
+      <PredictionLine m={m} finished={finished} />
     </div>
   );
 }
@@ -212,15 +202,13 @@ function TeamLine({
 
 function PredictionLine({
   m,
-  tone,
   finished,
 }: {
   m: DayMatch;
-  tone: Tone;
   finished: boolean;
 }) {
   if (!m.myPrediction) {
-    if (tone === "past") {
+    if (finished) {
       return (
         <p className="rounded-md bg-[var(--color-stone-100)] px-2 py-1 text-[11px] text-[var(--color-muted)]">
           No hiciste pronóstico.

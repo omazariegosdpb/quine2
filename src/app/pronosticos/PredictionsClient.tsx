@@ -28,7 +28,17 @@ type DayGroup = {
 
 type PredMap = Map<number, { home: number; away: number } | null>;
 
-export function PredictionsClient({ items, locked }: { items: MatchVM[]; locked: boolean }) {
+export function PredictionsClient({
+  items,
+  locked,
+  focusToday = false,
+  todayKey,
+}: {
+  items: MatchVM[];
+  locked: boolean;
+  focusToday?: boolean;
+  todayKey?: string;
+}) {
   // Fuente única de verdad para el estado de pronósticos.
   // Inicializa con lo que vino del server; cada guardado exitoso lo actualiza
   // y eso recalcula contadores de tabs y de la fecha en vivo.
@@ -60,9 +70,17 @@ export function PredictionsClient({ items, locked }: { items: MatchVM[]; locked:
 
   const initial = useMemo(() => {
     if (days.length === 0) return 0;
+    // Ronda cerrada/jugándose: abrir en el día de hoy (el partido actual).
+    if (focusToday && todayKey) {
+      const exact = days.findIndex((d) => d.key === todayKey);
+      if (exact !== -1) return exact;
+      // Si hoy no tiene partidos, ir al día más cercano hacia adelante (o el último).
+      const upcoming = days.findIndex((d) => d.key >= todayKey);
+      return upcoming === -1 ? days.length - 1 : upcoming;
+    }
     const firstIncomplete = days.findIndex((d) => d.matches.some((m) => !m.pred));
     return firstIncomplete === -1 ? 0 : firstIncomplete;
-  }, [days]);
+  }, [days, focusToday, todayKey]);
 
   const [activeIdx, setActiveIdx] = useState<number>(initial);
   const active = days[activeIdx];
