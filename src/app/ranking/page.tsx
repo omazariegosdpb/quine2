@@ -36,18 +36,28 @@ export default async function RankingPage({
   const supabase = await createSupabaseServerClient();
   const { grupo } = await searchParams;
 
-  // Grupos de ranking disponibles = rondas activas que fueron "amarradas".
-  const { data: groupRounds } = await supabase
+  // Rondas activas: sirven para las pestañas y para acotar el conteo de partidos.
+  const { data: roundRows } = await supabase
     .from("rounds")
-    .select("ranking_group")
-    .eq("is_active", true)
-    .not("ranking_group", "is", null);
+    .select("id, code, is_locked, ranking_group")
+    .eq("is_active", true);
+  const activeRounds = roundRows ?? [];
+
+  // Grupos de ranking disponibles = rondas activas que fueron "amarradas".
   const groups = Array.from(
-    new Set((groupRounds ?? []).map((r) => r.ranking_group).filter((g): g is string => !!g)),
+    new Set(activeRounds.map((r) => r.ranking_group).filter((g): g is string => !!g)),
   ).sort((a, b) => a.localeCompare(b));
 
   // Pestaña activa: "general" (la de siempre) o uno de los grupos amarrados.
   const selectedGroup = grupo && groups.includes(grupo) ? grupo : null;
+
+  // Rondas relevantes a la pestaña actual:
+  //   - General → rondas SIN grupo (cada ronda cuenta en un solo ranking).
+  //   - Grupo   → rondas con ese grupo.
+  const relevantRounds = activeRounds.filter((r) =>
+    selectedGroup ? r.ranking_group === selectedGroup : r.ranking_group == null,
+  );
+  const relevantRoundIds = relevantRounds.map((r) => r.id);
 
   // --- Leaderboard según pestaña --------------------------------------------
   let sorted: StandingRow[] = [];
@@ -66,11 +76,24 @@ export default async function RankingPage({
     sorted = (data ?? []).slice().sort(compareStandings);
   }
 
-  // --- Datos extra SOLO para el ranking general -----------------------------
-  // (progreso de pronósticos y delta del último partido son del torneo
-  //  completo; en un grupo amarrado el leaderboard se muestra "limpio".)
+  // --- Conteo de partidos acotado a las rondas de la pestaña ----------------
   let finishedMatches = 0;
   let totalMatches = 0;
+  const relevantMatchIds = new Set<number>();
+  if (relevantRoundIds.length > 0) {
+    const { data: matchRows } = await supabase
+      .from("matches")
+      .select("id, status")
+      .in("round_id", relevantRoundIds);
+    for (const m of matchRows ?? []) {
+      relevantMatchIds.add(m.id);
+      if (m.status === "finished") finishedMatches++;
+    }
+    totalMatches = relevantMatchIds.size;
+  }
+
+  // --- Datos extra SOLO para el ranking general -----------------------------
+  // (progreso por jugador y delta del último partido; quedan en el General.)
   let locked = false;
   let lastMatchLabel: string | null = null;
   const completedByUser = new Map<string, number>();
@@ -78,35 +101,17 @@ export default async function RankingPage({
   let lastMatch: { id: number } | null = null;
 
   if (!selectedGroup) {
-    const { count: fm } = await supabase
-      .from("matches")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "finished");
-    finishedMatches = fm ?? 0;
-    const { count: tm } = await supabase
-      .from("matches")
-      .select("id", { count: "exact", head: true });
-    totalMatches = tm ?? 0;
+    // "Bloqueado" = la fase de grupos ya está sellada (misma regla que antes).
+    const groupsRound = activeRounds.find((r) => r.code === "GROUPS");
+    locked = groupsRound?.is_locked ?? false;
 
-    // Para mostrar "X / 72 pronósticos completados" antes del cierre (decisión Oscar).
-    const { data: round } = await supabase
-      .from("rounds")
-      .select("is_locked")
-      .eq("code", "GROUPS")
-      .maybeSingle();
-    locked = round?.is_locked ?? false;
-
-    // Conteo de pronósticos por usuario.
+    // Conteo de pronósticos por usuario, acotado a los partidos del General.
     //
     // Visibilidad: con el cliente de sesión, RLS solo deja a un jugador leer SUS
     // propios pronósticos antes del cierre, así que los demás le salían 0/72.
     // Para que TODOS vean el conteo (solo el número, nunca las jugadas ajenas)
-    // agregamos del lado del servidor con el service-role (salta RLS). Si no está
-    // configurado, caemos al cliente de sesión (el jugador solo verá el suyo).
-    //
-    // OJO: PostgREST devuelve máx. 1000 filas por request; con varios usuarios ×
-    // 72 partidos se supera ese tope y el conteo quedaba truncado (p.ej. 40/72
-    // cuando el usuario ya tenía los 72). Paginamos para contar todas las filas.
+    // agregamos con el service-role (salta RLS). Sin service role, el jugador
+    // solo verá el suyo. Paginamos porque PostgREST devuelve máx. 1000 filas.
     let counter = supabase;
     try {
       counter = createSupabaseAdminClient();
@@ -114,29 +119,31 @@ export default async function RankingPage({
       // sin service role: el jugador solo verá el conteo propio.
     }
 
-    if (!locked) {
+    if (!locked && relevantMatchIds.size > 0) {
       const pageSize = 1000;
       for (let from = 0; ; from += pageSize) {
         const { data, error } = await counter
           .from("predictions")
-          .select("user_id")
+          .select("user_id, match_id")
           // orden por clave única (user_id, match_id) → paginación estable
           .order("user_id", { ascending: true })
           .order("match_id", { ascending: true })
           .range(from, from + pageSize - 1);
         if (error || !data || data.length === 0) break;
         for (const r of data) {
-          completedByUser.set(r.user_id, (completedByUser.get(r.user_id) ?? 0) + 1);
+          if (relevantMatchIds.has(r.match_id)) {
+            completedByUser.set(r.user_id, (completedByUser.get(r.user_id) ?? 0) + 1);
+          }
         }
         if (data.length < pageSize) break;
       }
     }
 
-    // Último partido con resultado: para mostrar "tras X vs Y" cuánto sumó cada
-    // quien. "Último" = el de kickoff más reciente que ya está finalizado.
+    // Último partido con resultado dentro del General (kickoff más reciente).
     const { data: lastMatchRows } = await supabase
       .from("matches")
       .select("id, home_team_id, away_team_id, home_score, away_score")
+      .in("round_id", relevantRoundIds)
       .eq("status", "finished")
       .not("home_score", "is", null)
       .not("away_score", "is", null)
@@ -156,8 +163,6 @@ export default async function RankingPage({
       const nameById = new Map((lmTeams ?? []).map((t) => [t.id, t.name]));
       lastMatchLabel = `${nameById.get(lm.home_team_id) ?? "?"} vs ${nameById.get(lm.away_team_id) ?? "?"}`;
 
-      // Pronósticos de TODOS para ese partido (service-role salta RLS). Cada
-      // usuario sumó 3 (exacto), 1 (resultado) o 0 (falla / sin pronóstico).
       const { data: lmPreds } = await counter
         .from("predictions")
         .select("user_id, home_score, away_score")
@@ -183,16 +188,12 @@ export default async function RankingPage({
           {selectedGroup ? selectedGroup : "Ranking"}
         </h1>
 
-        {selectedGroup ? (
-          <p className="mt-1 text-sm text-[var(--color-text-soft)]">
-            Suma solo las rondas amarradas a <strong>{selectedGroup}</strong>.
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-[var(--color-text-soft)]">
-            Partidos jugados: {finishedMatches} / {totalMatches}
-            {!locked && " · pronósticos visibles después del cierre"}
-          </p>
-        )}
+        <p className="mt-1 text-sm text-[var(--color-text-soft)]">
+          Partidos jugados: {finishedMatches} / {totalMatches}
+          {selectedGroup
+            ? " · suma solo las rondas de este grupo"
+            : !locked && " · pronósticos visibles después del cierre"}
+        </p>
 
         {groups.length > 0 && (
           <RankingTabs groups={groups} selected={selectedGroup} />
