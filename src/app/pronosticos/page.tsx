@@ -15,9 +15,40 @@ export default async function PronosticosPage({
 }: {
   searchParams: Promise<{ round?: string }>;
 }) {
+  const { round: requestedCode } = await searchParams;
+
+  // Reintento automático en el servidor. El fallo "siempre la primera vez, se
+  // compone al reintentar" es transitorio (arranque en frío / conexión a
+  // Supabase). Si tu "Reintentar" manual lo arregla, este reintento lo hace
+  // solo y el usuario nunca ve el error. Los redirects de sesión NO se
+  // reintentan (son flujo normal). Si tras los intentos sigue fallando, se
+  // re-lanza para que el error.tsx muestre la tarjeta y quede el log abajo.
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await buildPronosticos(requestedCode);
+    } catch (err) {
+      if (isControlFlowError(err)) throw err; // redirect() / notFound(): no reintentar
+      console.error(`[pronosticos] intento ${attempt}/${MAX_ATTEMPTS} falló`, {
+        round: requestedCode ?? "(default)",
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (attempt >= MAX_ATTEMPTS) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+    }
+  }
+}
+
+/** Detecta los "errores" de control de Next (redirect/notFound) para no reintentarlos. */
+function isControlFlowError(err: unknown): boolean {
+  const digest = (err as { digest?: unknown })?.digest;
+  return typeof digest === "string" && (digest.startsWith("NEXT_REDIRECT") || digest.startsWith("NEXT_NOT_FOUND"));
+}
+
+async function buildPronosticos(requestedCode?: string) {
   const session = await requireSession();
   const supabase = await createSupabaseServerClient();
-  const { round: requestedCode } = await searchParams;
 
   // Admins ven todas las rondas (activas e inactivas); jugadores solo las activas.
   const isAdmin = session.profile.role === "admin";

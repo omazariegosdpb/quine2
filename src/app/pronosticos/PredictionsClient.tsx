@@ -569,6 +569,11 @@ function PointsBadge({
 // ============================================================================
 function isoDayInGT(iso: string): string {
   const d = new Date(iso);
+  // new Date(NaN).toISOString() lanza RangeError; protegemos para no romper el render.
+  if (Number.isNaN(d.getTime())) {
+    console.warn("[PredictionsClient] kickoff inválido:", iso);
+    return "0000-00-00";
+  }
   const gt = new Date(d.getTime() - 6 * 60 * 60 * 1000);
   return gt.toISOString().slice(0, 10);
 }

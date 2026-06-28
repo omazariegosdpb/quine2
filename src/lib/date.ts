@@ -7,6 +7,12 @@ export function formatGT(
   opts: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" },
 ): string {
   const d = typeof date === "string" ? new Date(date) : date;
+  // Intl.DateTimeFormat con dateStyle/timeStyle lanza RangeError si la fecha es
+  // inválida; devolvemos un placeholder y dejamos rastro en vez de tumbar la página.
+  if (Number.isNaN(d.getTime())) {
+    console.warn("[formatGT] fecha inválida:", date);
+    return "—";
+  }
   return new Intl.DateTimeFormat("es-GT", {
     timeZone: TIMEZONE,
     ...opts,
