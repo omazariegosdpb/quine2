@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { requireSession } from "@/lib/auth/session";
 import {
@@ -7,130 +8,197 @@ import {
 
 export const metadata = { title: "Ranking · Quiniela Mundial 2026" };
 
-export default async function RankingPage() {
+type StandingRow = {
+  user_id: string;
+  display_name: string;
+  is_active: boolean;
+  points: number;
+  exact_count: number;
+  result_count: number;
+};
+
+// Orden del leaderboard: pts ↓, exactos ↓, resultados ↓, nombre ↑.
+function compareStandings(a: StandingRow, b: StandingRow) {
+  return (
+    b.points - a.points
+    || b.exact_count - a.exact_count
+    || b.result_count - a.result_count
+    || a.display_name.localeCompare(b.display_name)
+  );
+}
+
+export default async function RankingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ grupo?: string }>;
+}) {
   const session = await requireSession();
   const supabase = await createSupabaseServerClient();
+  const { grupo } = await searchParams;
 
-  const { data: standings } = await supabase
-    .from("v_standings")
-    .select("*")
-    .eq("is_active", true);
-
-  const sorted = (standings ?? [])
-    .slice()
-    .sort((a, b) =>
-      b.points - a.points
-      || b.exact_count - a.exact_count
-      || b.result_count - a.result_count
-      || a.display_name.localeCompare(b.display_name),
-    );
-
-  // ¿Cuántos partidos están jugados? Sirve para mostrar "X de 72".
-  const { count: finishedMatches } = await supabase
-    .from("matches")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "finished");
-  const { count: totalMatches } = await supabase
-    .from("matches")
-    .select("id", { count: "exact", head: true });
-
-  // Para mostrar "X / 72 pronósticos completados" antes del cierre (decisión Oscar).
-  const { data: round } = await supabase
+  // Grupos de ranking disponibles = rondas activas que fueron "amarradas".
+  const { data: groupRounds } = await supabase
     .from("rounds")
-    .select("is_locked")
-    .eq("code", "GROUPS")
-    .maybeSingle();
-  const locked = round?.is_locked ?? false;
+    .select("ranking_group")
+    .eq("is_active", true)
+    .not("ranking_group", "is", null);
+  const groups = Array.from(
+    new Set((groupRounds ?? []).map((r) => r.ranking_group).filter((g): g is string => !!g)),
+  ).sort((a, b) => a.localeCompare(b));
 
-  // Conteo de pronósticos por usuario.
-  //
-  // Visibilidad: con el cliente de sesión, RLS solo deja a un jugador leer SUS
-  // propios pronósticos antes del cierre, así que los demás le salían 0/72.
-  // Para que TODOS vean el conteo (solo el número, nunca las jugadas ajenas)
-  // agregamos del lado del servidor con el service-role (salta RLS). Si no está
-  // configurado, caemos al cliente de sesión (el jugador solo verá el suyo).
-  //
-  // OJO: PostgREST devuelve máx. 1000 filas por request; con varios usuarios ×
-  // 72 partidos se supera ese tope y el conteo quedaba truncado (p.ej. 40/72
-  // cuando el usuario ya tenía los 72). Paginamos para contar todas las filas.
-  let counter = supabase;
-  try {
-    counter = createSupabaseAdminClient();
-  } catch {
-    // sin service role: el jugador solo verá el conteo propio.
+  // Pestaña activa: "general" (la de siempre) o uno de los grupos amarrados.
+  const selectedGroup = grupo && groups.includes(grupo) ? grupo : null;
+
+  // --- Leaderboard según pestaña --------------------------------------------
+  let sorted: StandingRow[] = [];
+  if (selectedGroup) {
+    const { data } = await supabase
+      .from("v_standings_by_group")
+      .select("*")
+      .eq("ranking_group", selectedGroup)
+      .eq("is_active", true);
+    sorted = (data ?? []).slice().sort(compareStandings);
+  } else {
+    const { data } = await supabase
+      .from("v_standings")
+      .select("*")
+      .eq("is_active", true);
+    sorted = (data ?? []).slice().sort(compareStandings);
   }
 
-  const completedByUser = new Map<string, number>();
-  if (!locked) {
-    const pageSize = 1000;
-    for (let from = 0; ; from += pageSize) {
-      const { data, error } = await counter
-        .from("predictions")
-        .select("user_id")
-        // orden por clave única (user_id, match_id) → paginación estable
-        .order("user_id", { ascending: true })
-        .order("match_id", { ascending: true })
-        .range(from, from + pageSize - 1);
-      if (error || !data || data.length === 0) break;
-      for (const r of data) {
-        completedByUser.set(r.user_id, (completedByUser.get(r.user_id) ?? 0) + 1);
-      }
-      if (data.length < pageSize) break;
-    }
-  }
-
-  // Último partido con resultado: para mostrar "tras X vs Y" cuánto sumó cada
-  // quien. "Último" = el de kickoff más reciente que ya está finalizado.
-  const { data: lastMatchRows } = await supabase
-    .from("matches")
-    .select("id, home_team_id, away_team_id, home_score, away_score")
-    .eq("status", "finished")
-    .not("home_score", "is", null)
-    .not("away_score", "is", null)
-    .order("kickoff_at", { ascending: false })
-    .limit(1);
-  const lastMatch = lastMatchRows?.[0] ?? null;
-
+  // --- Datos extra SOLO para el ranking general -----------------------------
+  // (progreso de pronósticos y delta del último partido son del torneo
+  //  completo; en un grupo amarrado el leaderboard se muestra "limpio".)
+  let finishedMatches = 0;
+  let totalMatches = 0;
+  let locked = false;
   let lastMatchLabel: string | null = null;
+  const completedByUser = new Map<string, number>();
   const lastDeltaByUser = new Map<string, number>();
-  if (lastMatch) {
-    const rHome = lastMatch.home_score ?? 0;
-    const rAway = lastMatch.away_score ?? 0;
+  let lastMatch: { id: number } | null = null;
 
-    const { data: lmTeams } = await supabase
-      .from("teams")
-      .select("id, name")
-      .in("id", [lastMatch.home_team_id, lastMatch.away_team_id]);
-    const nameById = new Map((lmTeams ?? []).map((t) => [t.id, t.name]));
-    lastMatchLabel = `${nameById.get(lastMatch.home_team_id) ?? "?"} vs ${nameById.get(lastMatch.away_team_id) ?? "?"}`;
+  if (!selectedGroup) {
+    const { count: fm } = await supabase
+      .from("matches")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "finished");
+    finishedMatches = fm ?? 0;
+    const { count: tm } = await supabase
+      .from("matches")
+      .select("id", { count: "exact", head: true });
+    totalMatches = tm ?? 0;
 
-    // Pronósticos de TODOS para ese partido (service-role salta RLS). Cada
-    // usuario sumó 3 (exacto), 1 (resultado) o 0 (falla / sin pronóstico).
-    const { data: lmPreds } = await counter
-      .from("predictions")
-      .select("user_id, home_score, away_score")
-      .eq("match_id", lastMatch.id);
-    for (const p of lmPreds ?? []) {
-      const exact = p.home_score === rHome && p.away_score === rAway;
-      const result = Math.sign(p.home_score - p.away_score) === Math.sign(rHome - rAway);
-      lastDeltaByUser.set(p.user_id, exact ? 3 : result ? 1 : 0);
+    // Para mostrar "X / 72 pronósticos completados" antes del cierre (decisión Oscar).
+    const { data: round } = await supabase
+      .from("rounds")
+      .select("is_locked")
+      .eq("code", "GROUPS")
+      .maybeSingle();
+    locked = round?.is_locked ?? false;
+
+    // Conteo de pronósticos por usuario.
+    //
+    // Visibilidad: con el cliente de sesión, RLS solo deja a un jugador leer SUS
+    // propios pronósticos antes del cierre, así que los demás le salían 0/72.
+    // Para que TODOS vean el conteo (solo el número, nunca las jugadas ajenas)
+    // agregamos del lado del servidor con el service-role (salta RLS). Si no está
+    // configurado, caemos al cliente de sesión (el jugador solo verá el suyo).
+    //
+    // OJO: PostgREST devuelve máx. 1000 filas por request; con varios usuarios ×
+    // 72 partidos se supera ese tope y el conteo quedaba truncado (p.ej. 40/72
+    // cuando el usuario ya tenía los 72). Paginamos para contar todas las filas.
+    let counter = supabase;
+    try {
+      counter = createSupabaseAdminClient();
+    } catch {
+      // sin service role: el jugador solo verá el conteo propio.
+    }
+
+    if (!locked) {
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await counter
+          .from("predictions")
+          .select("user_id")
+          // orden por clave única (user_id, match_id) → paginación estable
+          .order("user_id", { ascending: true })
+          .order("match_id", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        for (const r of data) {
+          completedByUser.set(r.user_id, (completedByUser.get(r.user_id) ?? 0) + 1);
+        }
+        if (data.length < pageSize) break;
+      }
+    }
+
+    // Último partido con resultado: para mostrar "tras X vs Y" cuánto sumó cada
+    // quien. "Último" = el de kickoff más reciente que ya está finalizado.
+    const { data: lastMatchRows } = await supabase
+      .from("matches")
+      .select("id, home_team_id, away_team_id, home_score, away_score")
+      .eq("status", "finished")
+      .not("home_score", "is", null)
+      .not("away_score", "is", null)
+      .order("kickoff_at", { ascending: false })
+      .limit(1);
+    const lm = lastMatchRows?.[0] ?? null;
+
+    if (lm) {
+      lastMatch = { id: lm.id };
+      const rHome = lm.home_score ?? 0;
+      const rAway = lm.away_score ?? 0;
+
+      const { data: lmTeams } = await supabase
+        .from("teams")
+        .select("id, name")
+        .in("id", [lm.home_team_id, lm.away_team_id]);
+      const nameById = new Map((lmTeams ?? []).map((t) => [t.id, t.name]));
+      lastMatchLabel = `${nameById.get(lm.home_team_id) ?? "?"} vs ${nameById.get(lm.away_team_id) ?? "?"}`;
+
+      // Pronósticos de TODOS para ese partido (service-role salta RLS). Cada
+      // usuario sumó 3 (exacto), 1 (resultado) o 0 (falla / sin pronóstico).
+      const { data: lmPreds } = await counter
+        .from("predictions")
+        .select("user_id, home_score, away_score")
+        .eq("match_id", lm.id);
+      for (const p of lmPreds ?? []) {
+        const exact = p.home_score === rHome && p.away_score === rAway;
+        const result = Math.sign(p.home_score - p.away_score) === Math.sign(rHome - rAway);
+        lastDeltaByUser.set(p.user_id, exact ? 3 : result ? 1 : 0);
+      }
     }
   }
+
+  const showProgress = !selectedGroup && !locked;
 
   return (
     <>
       <Header profile={session.profile} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-3 py-6 sm:px-4">
         <p className="font-display text-xs uppercase tracking-widest text-[var(--color-pitch-700)]">
-          Tabla general
+          {selectedGroup ? "Ranking por grupo" : "Tabla general"}
         </p>
-        <h1 className="font-display text-3xl text-[var(--color-text)] md:text-4xl">Ranking</h1>
-        <p className="mt-1 text-sm text-[var(--color-text-soft)]">
-          Partidos jugados: {finishedMatches ?? 0} / {totalMatches ?? 0}
-          {!locked && " · pronósticos visibles después del cierre"}
-        </p>
+        <h1 className="font-display text-3xl text-[var(--color-text)] md:text-4xl">
+          {selectedGroup ? selectedGroup : "Ranking"}
+        </h1>
 
-        {lastMatchLabel && (
+        {selectedGroup ? (
+          <p className="mt-1 text-sm text-[var(--color-text-soft)]">
+            Suma solo las rondas amarradas a <strong>{selectedGroup}</strong>.
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-[var(--color-text-soft)]">
+            Partidos jugados: {finishedMatches} / {totalMatches}
+            {!locked && " · pronósticos visibles después del cierre"}
+          </p>
+        )}
+
+        {groups.length > 0 && (
+          <RankingTabs groups={groups} selected={selectedGroup} />
+        )}
+
+        {!selectedGroup && lastMatchLabel && (
           <p className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-info-100)] bg-[var(--color-info-50)] px-3 py-2 text-sm text-[var(--color-info-800)]">
             <span aria-hidden>⚽️</span>
             <span>
@@ -149,9 +217,9 @@ export default async function RankingPage() {
                 exact={row.exact_count}
                 result={row.result_count}
                 isSelf={row.user_id === session.userId}
-                progress={locked ? null : completedByUser.get(row.user_id) ?? 0}
-                progressMax={totalMatches ?? 0}
-                lastDelta={lastMatch ? lastDeltaByUser.get(row.user_id) ?? 0 : null}
+                progress={showProgress ? completedByUser.get(row.user_id) ?? 0 : null}
+                progressMax={totalMatches}
+                lastDelta={!selectedGroup && lastMatch ? lastDeltaByUser.get(row.user_id) ?? 0 : null}
               />
             </li>
           ))}
@@ -163,6 +231,41 @@ export default async function RankingPage() {
         </ol>
       </main>
     </>
+  );
+}
+
+function RankingTabs({
+  groups,
+  selected,
+}: {
+  groups: string[];
+  selected: string | null;
+}) {
+  const tabs: { key: string | null; label: string; href: string }[] = [
+    { key: null, label: "General", href: "/ranking" },
+    ...groups.map((g) => ({ key: g, label: g, href: `/ranking?grupo=${encodeURIComponent(g)}` })),
+  ];
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      {tabs.map((t) => {
+        const active = t.key === selected;
+        return (
+          <Link
+            key={t.key ?? "__general__"}
+            href={t.href}
+            aria-current={active ? "page" : undefined}
+            className={[
+              "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+              active
+                ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-white"
+                : "border-[var(--color-border)] bg-white text-[var(--color-text-soft)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]",
+            ].join(" ")}
+          >
+            {t.label}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 

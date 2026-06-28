@@ -24,10 +24,21 @@ function getAdmin(): { ok: true; client: ReturnType<typeof createSupabaseAdminCl
 
 // ---------- Crear ronda -----------------------------------------------------
 
+// ranking_group: etiqueta opcional para "amarrar" rondas en un ranking propio.
+// Vacío → null (la ronda solo cuenta en el ranking general).
+const RankingGroupField = z
+  .string()
+  .trim()
+  .max(40)
+  .regex(/^[A-Za-z0-9 _-]*$/, "Solo letras, números, espacios, guion y _")
+  .transform((v) => (v === "" ? null : v))
+  .nullable();
+
 const CreateSchema = z.object({
   code:           z.string().trim().min(2).max(20).regex(/^[A-Z0-9_]+$/, "Solo mayúsculas, números y _"),
   name:           z.string().trim().min(2).max(80),
   closesAtLocal:  z.string().min(10),
+  rankingGroup:   RankingGroupField,
 });
 
 export async function createRoundAction(_prev: RoundActionState, formData: FormData): Promise<RoundActionState> {
@@ -36,6 +47,7 @@ export async function createRoundAction(_prev: RoundActionState, formData: FormD
     code: formData.get("code"),
     name: formData.get("name"),
     closesAtLocal: formData.get("closesAtLocal"),
+    rankingGroup: formData.get("rankingGroup") ?? "",
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Datos inválidos" };
 
@@ -48,6 +60,7 @@ export async function createRoundAction(_prev: RoundActionState, formData: FormD
       code: parsed.data.code,
       name: parsed.data.name,
       closes_at: localGTtoISO(parsed.data.closesAtLocal),
+      ranking_group: parsed.data.rankingGroup,
       is_active: true,
       is_locked: false,
     })
@@ -110,6 +123,56 @@ export async function updateRoundCloseAction(_prev: RoundActionState, formData: 
 
   revalidatePath("/admin/rondas");
   return { ok: true, message: "Cierre actualizado." };
+}
+
+// ---------- Amarrar ronda a un grupo de ranking -----------------------------
+
+const RankingGroupSchema = z.object({
+  roundId: z.string().uuid(),
+  rankingGroup: RankingGroupField,
+});
+
+export async function updateRoundRankingGroupAction(_prev: RoundActionState, formData: FormData): Promise<RoundActionState> {
+  const me = await requireAdmin();
+  const parsed = RankingGroupSchema.safeParse({
+    roundId: formData.get("roundId"),
+    rankingGroup: formData.get("rankingGroup") ?? "",
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+
+  const admin = getAdmin();
+  if (!admin.ok) return admin;
+
+  const { data: before } = await admin.client
+    .from("rounds")
+    .select("ranking_group, name")
+    .eq("id", parsed.data.roundId)
+    .single();
+  if (!before) return { ok: false, message: "Ronda no encontrada" };
+
+  const { error } = await admin.client
+    .from("rounds")
+    .update({ ranking_group: parsed.data.rankingGroup })
+    .eq("id", parsed.data.roundId);
+  if (error) return { ok: false, message: error.message };
+
+  await admin.client.from("audit_log").insert({
+    actor_id: me.userId,
+    action: "update_round_ranking_group",
+    entity: "rounds",
+    entity_id: parsed.data.roundId,
+    before_val: { ranking_group: before.ranking_group },
+    after_val: { ranking_group: parsed.data.rankingGroup },
+  });
+
+  revalidatePath("/admin/rondas");
+  revalidatePath("/ranking");
+  return {
+    ok: true,
+    message: parsed.data.rankingGroup
+      ? `“${before.name}” amarrada al ranking “${parsed.data.rankingGroup}”.`
+      : `“${before.name}” desvinculada (solo cuenta en el ranking general).`,
+  };
 }
 
 // ---------- Sellar ----------------------------------------------------------
