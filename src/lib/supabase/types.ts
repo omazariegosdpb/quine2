@@ -28,6 +28,8 @@ export type Round = {
   closes_at: string;
   is_locked: boolean;
   is_active: boolean;
+  /** Etiqueta para "amarrar" rondas en un ranking propio. NULL = solo cuenta en el general. */
+  ranking_group: string | null;
   snapshot_at: string | null;
   snapshot_hash: string | null;
 };
@@ -174,6 +176,19 @@ export type Database = {
     Views: {
       v_standings: {
         Row: {
+          user_id: string;
+          display_name: string;
+          is_active: boolean;
+          points: number;
+          exact_count: number;
+          result_count: number;
+          miss_count: number;
+        };
+        Relationships: [];
+      };
+      v_standings_by_group: {
+        Row: {
+          ranking_group: string;
           user_id: string;
           display_name: string;
           is_active: boolean;

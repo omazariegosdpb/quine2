@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useTransition } from "react";
 import {
   updateRoundCloseAction,
+  updateRoundRankingGroupAction,
   sealRoundAction,
   toggleRoundActiveAction,
   deleteRoundAction,
@@ -24,6 +25,7 @@ type Props = {
     closes_at: string;
     is_locked: boolean;
     is_active: boolean;
+    ranking_group: string | null;
     snapshot_at: string | null;
     snapshot_hash: string | null;
   };
@@ -32,6 +34,7 @@ type Props = {
 
 export function RoundEditor({ round, closesAtLocal }: Props) {
   const [state, action, pending] = useActionState(updateRoundCloseAction, INITIAL);
+  const [groupState, groupAction, groupPending] = useActionState(updateRoundRankingGroupAction, INITIAL);
   const [sealPending, startSeal] = useTransition();
   const [togglePending, startToggle] = useTransition();
   const [deletePending, startDelete] = useTransition();
@@ -44,6 +47,12 @@ export function RoundEditor({ round, closesAtLocal }: Props) {
     if (state.ok) toast.success(state.message);
     else toast.error(state.message);
   }, [state, toast]);
+
+  useEffect(() => {
+    if (!groupState.message) return;
+    if (groupState.ok) toast.success(groupState.message);
+    else toast.error(groupState.message);
+  }, [groupState, toast]);
 
   async function doSeal() {
     const ok = await confirm({
@@ -117,6 +126,9 @@ export function RoundEditor({ round, closesAtLocal }: Props) {
           <Pill tone={round.is_active ? "blue" : "muted"}>
             {round.is_active ? "Activa" : "Inactiva"}
           </Pill>
+          {round.ranking_group && (
+            <Pill tone="amber">🔗 {round.ranking_group}</Pill>
+          )}
         </div>
       </header>
 
@@ -154,6 +166,20 @@ export function RoundEditor({ round, closesAtLocal }: Props) {
           </form>
         )}
 
+        <form action={groupAction} className="space-y-2 border-t border-[var(--color-border)] pt-3">
+          <input type="hidden" name="roundId" value={round.id} />
+          <Field
+            label="Grupo de ranking (amarre)"
+            name="rankingGroup"
+            defaultValue={round.ranking_group ?? ""}
+            placeholder="Ej.: ELIMINATORIAS"
+            hint="Rondas con el mismo grupo comparten un ranking aparte (16avos + 8avos = un solo leaderboard). Vacío = solo cuenta en el ranking general."
+          />
+          <Button type="submit" variant="secondary" size="sm" isLoading={groupPending}>
+            Guardar grupo
+          </Button>
+        </form>
+
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-3">
           <Button
             type="button"
@@ -181,11 +207,12 @@ export function RoundEditor({ round, closesAtLocal }: Props) {
   );
 }
 
-function Pill({ tone, children }: { tone: "muted" | "green" | "blue"; children: React.ReactNode }) {
+function Pill({ tone, children }: { tone: "muted" | "green" | "blue" | "amber"; children: React.ReactNode }) {
   const cls = {
     muted: "bg-[var(--color-stone-200)] text-[var(--color-stone-700)]",
     green: "bg-[var(--color-primary)] text-white",
     blue:  "bg-[var(--color-info)] text-white",
+    amber: "bg-[var(--color-gold-50)] text-[var(--color-gold-700)]",
   }[tone];
   return (
     <span className={["inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide", cls].join(" ")}>

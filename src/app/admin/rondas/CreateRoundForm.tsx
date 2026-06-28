@@ -71,6 +71,14 @@ export function CreateRoundForm({ defaultCloseLocal }: { defaultCloseLocal: stri
           />
         </div>
         <div className="sm:col-span-2">
+          <Field
+            label="Grupo de ranking (opcional)"
+            name="rankingGroup"
+            placeholder="Ej.: ELIMINATORIAS"
+            hint="Para amarrar esta ronda con otras en un ranking aparte. Vacío = solo cuenta en el ranking general."
+          />
+        </div>
+        <div className="sm:col-span-2">
           <Button type="submit" isLoading={pending}>Crear ronda</Button>
         </div>
       </form>
