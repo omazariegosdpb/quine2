@@ -92,54 +92,24 @@ export default async function RankingPage({
     totalMatches = relevantMatchIds.size;
   }
 
-  // --- Datos extra SOLO para el ranking general -----------------------------
-  // (progreso por jugador y delta del último partido; quedan en el General.)
-  let locked = false;
+  // Cliente service-role para agregados que deben ver TODAS las filas saltando
+  // RLS (deltas y conteos de todos los jugadores, nunca jugadas individuales).
+  // Sin service role caemos al cliente de sesión (el jugador solo verá lo suyo).
+  let counter = supabase;
+  try {
+    counter = createSupabaseAdminClient();
+  } catch {
+    // sin service role: el jugador solo verá su propio aporte/conteo.
+  }
+
+  // --- Último partido jugado de la pestaña + "lo que sumó cada quien" --------
+  // Aplica al General Y a cada grupo (acotado a las rondas de la pestaña). Para
+  // FASE2 muestra el último partido jugado de esa ronda y el +3/+1/+0 de cada uno.
   let lastMatchLabel: string | null = null;
-  const completedByUser = new Map<string, number>();
   const lastDeltaByUser = new Map<string, number>();
   let lastMatch: { id: number } | null = null;
 
-  if (!selectedGroup) {
-    // "Bloqueado" = la fase de grupos ya está sellada (misma regla que antes).
-    const groupsRound = activeRounds.find((r) => r.code === "GROUPS");
-    locked = groupsRound?.is_locked ?? false;
-
-    // Conteo de pronósticos por usuario, acotado a los partidos del General.
-    //
-    // Visibilidad: con el cliente de sesión, RLS solo deja a un jugador leer SUS
-    // propios pronósticos antes del cierre, así que los demás le salían 0/72.
-    // Para que TODOS vean el conteo (solo el número, nunca las jugadas ajenas)
-    // agregamos con el service-role (salta RLS). Sin service role, el jugador
-    // solo verá el suyo. Paginamos porque PostgREST devuelve máx. 1000 filas.
-    let counter = supabase;
-    try {
-      counter = createSupabaseAdminClient();
-    } catch {
-      // sin service role: el jugador solo verá el conteo propio.
-    }
-
-    if (!locked && relevantMatchIds.size > 0) {
-      const pageSize = 1000;
-      for (let from = 0; ; from += pageSize) {
-        const { data, error } = await counter
-          .from("predictions")
-          .select("user_id, match_id")
-          // orden por clave única (user_id, match_id) → paginación estable
-          .order("user_id", { ascending: true })
-          .order("match_id", { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (error || !data || data.length === 0) break;
-        for (const r of data) {
-          if (relevantMatchIds.has(r.match_id)) {
-            completedByUser.set(r.user_id, (completedByUser.get(r.user_id) ?? 0) + 1);
-          }
-        }
-        if (data.length < pageSize) break;
-      }
-    }
-
-    // Último partido con resultado dentro del General (kickoff más reciente).
+  if (relevantRoundIds.length > 0) {
     const { data: lastMatchRows } = await supabase
       .from("matches")
       .select("id, home_team_id, away_team_id, home_score, away_score")
@@ -175,6 +145,38 @@ export default async function RankingPage({
     }
   }
 
+  // --- Progreso "X/Y listos" por jugador: SOLO en el General antes del cierre -
+  let locked = false;
+  const completedByUser = new Map<string, number>();
+
+  if (!selectedGroup) {
+    // "Bloqueado" = la fase de grupos ya está sellada (misma regla que antes).
+    const groupsRound = activeRounds.find((r) => r.code === "GROUPS");
+    locked = groupsRound?.is_locked ?? false;
+
+    // Conteo de pronósticos por usuario, acotado a los partidos del General.
+    // Paginamos porque PostgREST devuelve máx. 1000 filas por request.
+    if (!locked && relevantMatchIds.size > 0) {
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await counter
+          .from("predictions")
+          .select("user_id, match_id")
+          // orden por clave única (user_id, match_id) → paginación estable
+          .order("user_id", { ascending: true })
+          .order("match_id", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        for (const r of data) {
+          if (relevantMatchIds.has(r.match_id)) {
+            completedByUser.set(r.user_id, (completedByUser.get(r.user_id) ?? 0) + 1);
+          }
+        }
+        if (data.length < pageSize) break;
+      }
+    }
+  }
+
   const showProgress = !selectedGroup && !locked;
 
   return (
@@ -199,7 +201,7 @@ export default async function RankingPage({
           <RankingTabs groups={groups} selected={selectedGroup} />
         )}
 
-        {!selectedGroup && lastMatchLabel && (
+        {lastMatchLabel && (
           <p className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-info-100)] bg-[var(--color-info-50)] px-3 py-2 text-sm text-[var(--color-info-800)]">
             <span aria-hidden>⚽️</span>
             <span>
@@ -220,7 +222,7 @@ export default async function RankingPage({
                 isSelf={row.user_id === session.userId}
                 progress={showProgress ? completedByUser.get(row.user_id) ?? 0 : null}
                 progressMax={totalMatches}
-                lastDelta={!selectedGroup && lastMatch ? lastDeltaByUser.get(row.user_id) ?? 0 : null}
+                lastDelta={lastMatch ? lastDeltaByUser.get(row.user_id) ?? 0 : null}
               />
             </li>
           ))}
